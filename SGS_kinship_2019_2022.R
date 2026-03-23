@@ -9,7 +9,7 @@ library(stringr)
 ## SGS ####
 # Read the CSV file (new format has Site, year, and same 7 microsat loci)
 # Original format: Code, Site, Sn50..Sn1618 (no year). New: Code, Site, year, Sn50..Sn1618
-data <- read.csv("SGS_2019_2022_microsats.csv")
+data <- read.csv("SGS_2019_2022_microsats_reduced_pops.csv")
 # First column is individual ID (Code); rename in case CSV has BOM
 names(data)[1] <- "PlantID"
 
@@ -29,7 +29,21 @@ geno_combined <- data %>%
   ) %>%
   select(PlantID, Site, year, Pop, Sn50, Sn347, Sn262, Sn463, Sn558b, Sn1015, Sn1618)
 
-# Set rownames as individual IDs
+# Drop rows with missing/blank PlantID; ensure unique rownames (duplicates get .1, .2, ...)
+geno_combined <- geno_combined %>%
+  filter(!is.na(PlantID), trimws(as.character(PlantID)) != "")
+geno_combined <- geno_combined %>%
+  mutate(PlantID = make.unique(as.character(PlantID)))
+rownames(geno_combined) <- geno_combined$PlantID
+
+# Keep only sites with data in both years, and exclude PMC
+sites_both_years <- geno_combined %>%
+  group_by(Site) %>%
+  summarise(both_years = n_distinct(year) == 2L, .groups = "drop") %>%
+  filter(both_years) %>%
+  pull(Site)
+sites_keep <- setdiff(sites_both_years, "PMC")
+geno_combined <- geno_combined %>% filter(Site %in% sites_keep)
 rownames(geno_combined) <- geno_combined$PlantID
 
 #### Missing data check per microsatellite ####
